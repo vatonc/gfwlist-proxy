@@ -45,15 +45,17 @@ jobs:
           persist-credentials: false
 
       - name: Package runtime files
+        env:
+          TAG: ${{ steps.tag.outputs.name }}
         shell: bash
         run: |
           set -euo pipefail
-          zip -9 "${RUNNER_TEMP}/gfwlist-proxy.zip" \
+          zip -9 "${RUNNER_TEMP}/gfwlist-proxy-${TAG}.zip" \
             manifest.json background.js popup.html popup.css popup.js gfwlist.txt COPYING.txt \
             icon-gray-16.png icon-gray-48.png icon-gray-128.png \
             icon-green-16.png icon-green-48.png icon-green-128.png \
             icon-red-16.png icon-red-48.png icon-red-128.png
-          unzip -l "${RUNNER_TEMP}/gfwlist-proxy.zip"
+          unzip -l "${RUNNER_TEMP}/gfwlist-proxy-${TAG}.zip"
 
       - name: Create release
         env:
@@ -67,5 +69,5 @@ jobs:
             echo "::error::Release for tag $TAG already exists; refusing to overwrite it."
             exit 1
           fi
-          gh release create "$TAG" "${RUNNER_TEMP}/gfwlist-proxy.zip" \
+          gh release create "$TAG" "${RUNNER_TEMP}/gfwlist-proxy-${TAG}.zip" \
             --verify-tag --title "$TAG" --generate-notes
