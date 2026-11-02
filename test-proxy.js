@@ -26,9 +26,18 @@ async function main(){
   assert((await send({type:'enable'})).ok);const update=await send({type:'update'});assert(update.ok&&update.message.includes('未统计跳过'));
   chrome.tabs.onUpdated.fire(1);await tick();assert(icons.some(x=>x.path[16]==='icon-red-16.png'));
   const elements={};for(const id of ['host','port','scheme','toggle','controls','save','test','update','siteProxy','siteDirect','result','listStatus','notice','siteStatus'])elements[id]={value:'',textContent:'',className:'',addEventListener(type,fn){this[type]=fn}};
-  let testResolve,lastTest;const tabEvent=event();const popupStatus=()=>({ok:true,enabled:true,config:{host:'127.0.0.1',port:'7890'},siteHost:'example.com',siteTabId:1,listCount:1,controlText:''});
-  const popupChrome={tabs:{onActivated:tabEvent,onUpdated:event()},runtime:{sendMessage:msg=>{if(msg.type==='status')return Promise.resolve(popupStatus());if(msg.type==='test'){lastTest=msg.config;return new Promise(r=>testResolve=r)}return Promise.resolve({ok:true,message:'完成'})}}};
-  vm.runInNewContext(fs.readFileSync('popup.js','utf8'),{chrome:popupChrome,document:{getElementById:id=>elements[id]},setInterval,clearInterval,console});await tick();elements.port.value='7892';elements.port.input();const testing=elements.test.onclick();assert.equal(lastTest.port,'7892');elements.port.value='7893';elements.port.input();testResolve({ok:true,message:'成功'});await testing;assert(elements.result.textContent.includes('输入已更改'));
+  let testResolve,lastTest,popupSaved={host:'Example.COM',port:'7890'},statusFail=false,testReject=false;const tabEvent=event();const popupStatus=()=>({ok:true,enabled:true,config:{...popupSaved},siteHost:'example.com',siteTabId:1,listCount:1,controlText:''});
+  const popupChrome={tabs:{onActivated:tabEvent,onUpdated:event()},runtime:{sendMessage:msg=>{if(msg.type==='status')return statusFail?Promise.reject(Error('状态异常')):Promise.resolve(popupStatus());if(msg.type==='save'){popupSaved={...msg.config};return Promise.resolve({ok:true,message:'已保存'})}if(msg.type==='test'){lastTest=msg.config;if(testReject)return Promise.reject(Error('通信异常'));return new Promise(r=>testResolve=r)}return Promise.resolve({ok:true,message:'完成'})}}};
+  vm.runInNewContext(fs.readFileSync('popup.js','utf8'),{chrome:popupChrome,document:{getElementById:id=>elements[id]},setInterval,clearInterval,console});await tick();
+  async function testPopup(result={ok:true,message:'成功'},edit){const testing=elements.test.onclick();if(edit)edit();testResolve(result);await testing;return elements.result.textContent}
+  elements.host.value=' example.com ';elements.port.value=' 7890 ';assert(!(await testPopup()).includes('未保存'));
+  elements.port.value='7892';elements.port.input();assert((await testPopup()).includes('配置未保存'));assert.equal(lastTest.port,'7892');
+  await elements.save.onclick();assert(!(await testPopup()).includes('未保存'));
+  elements.scheme.value='socks5';elements.scheme.input();assert((await testPopup()).includes('配置未保存'));elements.scheme.value='http';elements.scheme.input();
+  assert((await testPopup({ok:true},()=>{elements.port.value='7893';elements.port.input()})).includes('输入已更改'));assert(!elements.result.textContent.includes('未保存'));
+  assert((await testPopup({ok:false,message:'测试失败：连接失败'})).includes('测试失败（配置未保存）：连接失败'));
+  statusFail=true;assert((await testPopup()).includes('测试成功'));assert(elements.result.textContent.includes('状态刷新失败'));assert.equal(elements.result.className,'result');statusFail=false;
+  testReject=true;await elements.test.onclick();assert(elements.result.textContent.includes('测试未完成'));assert(elements.result.textContent.includes('配置未保存'));testReject=false;
   for(const scheme of ['http','https','socks5']){
     const config={host:'127.0.0.1',port:'7892',scheme};
     assert((await send({type:'save',config})).ok);
