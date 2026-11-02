@@ -1,0 +1,71 @@
+name: Package and release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing v* tag to release (for example, v1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate tag
+        id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_TAG: ${{ github.ref_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            tag="$INPUT_TAG"
+          else
+            tag="$PUSH_TAG"
+          fi
+          if [[ ! "$tag" =~ ^v[0-9A-Za-z][0-9A-Za-z._-]*$ ]] || ! git check-ref-format "refs/tags/$tag"; then
+            echo "::error::Invalid tag. Use a v-prefixed tag containing only letters, numbers, dots, underscores, or hyphens."
+            exit 1
+          fi
+          echo "name=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the tagged commit
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ steps.tag.outputs.name }}
+          persist-credentials: false
+
+      - name: Package runtime files
+        shell: bash
+        run: |
+          set -euo pipefail
+          zip -9 "${RUNNER_TEMP}/gfwlist-proxy.zip" \
+            manifest.json background.js popup.html popup.css popup.js gfwlist.txt COPYING.txt \
+            icon-gray-16.png icon-gray-48.png icon-gray-128.png \
+            icon-green-16.png icon-green-48.png icon-green-128.png \
+            icon-red-16.png icon-red-48.png icon-red-128.png
+          unzip -l "${RUNNER_TEMP}/gfwlist-proxy.zip"
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.tag.outputs.name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::error::Release for tag $TAG already exists; refusing to overwrite it."
+            exit 1
+          fi
+          gh release create "$TAG" "${RUNNER_TEMP}/gfwlist-proxy.zip" \
+            --verify-tag --title "$TAG" --generate-notes
