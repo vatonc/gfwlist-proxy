@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "GFWList 代理切换",
+  "version": "1.0.0",
+  "description": "按本地 GFWList 规则选择代理，不执行远程代码。",
+  "permissions": ["proxy", "storage", "tabs"],
+  "host_permissions": ["https://raw.githubusercontent.com/*", "https://www.gstatic.com/*"],
+  "background": {"service_worker": "background.js"},
+  "action": {
+    "default_title": "GFWList 代理状态",
+    "default_popup": "popup.html",
+    "default_icon": {"16": "icon-gray-16.png", "48": "icon-gray-48.png", "128": "icon-gray-128.png"}
+  },
+  "icons": {"16": "icon-gray-16.png", "48": "icon-gray-48.png", "128": "icon-gray-128.png"}
+}
